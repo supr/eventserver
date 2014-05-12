@@ -1,0 +1,78 @@
+#include <cstdlib>
+#include <iostream>
+#include <cstdio>
+#include <cstring>
+
+#include <error.h>
+#include <unistd.h>
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <sys/epoll.h>
+
+#include "eventserver.h"
+
+enum {ARG_PROG, ARG_PORT, ARG_END };
+
+void echo(const net::prudhvi::event_ctx_t* ctx)
+{
+  std::cout <<
+    "Handler called" <<
+    " Client: " << ctx->client_fd << 
+    " Server: " << ctx->server_fd <<
+    " Epoll: " << ctx->epoll_fd <<
+    " Events:" << ((ctx->events & EPOLLIN) ? " EPOLLIN": "") << ((ctx->events & EPOLLOUT) ? " EPOLLOUT": "") <<
+    std::endl;
+
+  if(ctx->events & EPOLLIN && false)
+  {
+    char buf[512] = {0};
+    int read_ = 0;
+    for(;;)
+    {
+      int n = recv(ctx->client_fd, buf + read_, sizeof(buf) - read_, MSG_NOSIGNAL);
+      if(n == -1)
+      {
+        if(errno != EAGAIN)
+        {
+          std::cerr << "read: " << std::strerror(errno) << std::endl;
+        }
+        break;
+      }
+      else if (n == 0)
+      {
+        break;
+      }
+      read_ += n;
+    }
+    std::cout << buf << std::endl;
+  }
+  if(ctx->events & EPOLLOUT)
+  {
+    char buf[] = "HTTP/1.1 200 OK\r\nServer: nginx/1.0.15\r\nData: Sun, 11 May 2014 07:00:20 GMT\r\nContent-Type: text/html\r\nContent-Length: 5\r\nLast-Modified: Fri, 12 Jul 2013 04:48:42 GMT\r\nConection: close\r\nAccept-Ranges: bytes\r\n\r\n1234";
+    //write(ctx->client_fd, buf, sizeof(buf));
+    send(ctx->client_fd, buf, sizeof(buf), MSG_NOSIGNAL);
+    close(ctx->client_fd);
+  }
+}
+
+void time(const net::prudhvi::event_ctx_t* ctx)
+{
+  return;
+}
+
+int main(int argc, const char** argv)
+{
+  bool fail = false;
+
+  if(argc < ARG_END)
+  {
+    std::cerr << "Usage: " << argv[ARG_PROG]
+              << " PORT" << std::endl;
+    return EXIT_FAILURE;
+  }
+
+  net::prudhvi::EventServer ev(std::strtoul(argv[ARG_PORT], nullptr, 10), 256);
+  ev.run(&echo);
+
+  return EXIT_SUCCESS;
+}
